@@ -17,13 +17,21 @@ public class CandyLandEspionage {
             isAccept[in.nextInt()] = true;
         }
 
-        // 3) Read transitions
+        // 3) Read transitions (supporting '?' as a wildcard for any single letter)
         int[][] trans = new int[n][sigma];
         for (int i = 0; i < T; i++) {
             int u = in.nextInt();
             char c = in.next().charAt(0);
             int v = in.nextInt();
-            trans[u][c - 'a'] = v;
+            if (c == '?') {
+                // wildcard: for every symbol in [0..sigma-1], go to v
+                for (int x = 0; x < sigma; x++) {
+                    trans[u][x] = v;
+                }
+            } else {
+                // normal letter
+                trans[u][c - 'a'] = v;
+            }
         }
 
         // 4) Read initial state
@@ -145,7 +153,6 @@ public class CandyLandEspionage {
         System.out.print(out);
     }
 
-    // Hopcroft structures and algorithm unchanged...
     static class HopcroftResult {
         int partitionCount;
         int[] partitionForState;
@@ -195,7 +202,7 @@ public class CandyLandEspionage {
                 int B = e.getKey();
                 List<Integer> inX = e.getValue();
                 List<Integer> blk = blocks.get(B);
-                if (inX.size()==blk.size()) continue;
+                if (inX.size() == blk.size()) continue;
                 Set<Integer> inSet = new HashSet<>(inX);
                 List<Integer> rem = new ArrayList<>();
                 for (int q: blk) if (!inSet.contains(q)) rem.add(q);
@@ -209,23 +216,23 @@ public class CandyLandEspionage {
 
         int pc = blocks.size();
         int[] partOf = new int[R]; boolean[] blockAcc = new boolean[pc];
-        for (int b=0; b<pc; b++) {
+        for (int b = 0; b < pc; b++) {
             for (int s: blocks.get(b)) partOf[s] = b;
             blockAcc[b] = accept[ blocks.get(b).get(0) ];
         }
         int[][] bTrans = new int[pc][sigma];
-        for (int b=0; b<pc; b++) {
+        for (int b = 0; b < pc; b++) {
             int r = blocks.get(b).get(0);
-            for (int c=0; c<sigma; c++) bTrans[b][c] = partOf[ trans[r][c] ];
+            for (int c = 0; c < sigma; c++) bTrans[b][c] = partOf[ trans[r][c] ];
         }
         return new HopcroftResult(pc, partOf, blockAcc, bTrans);
     }
 
     static class FastReader {
         BufferedReader br; StringTokenizer st;
-        FastReader(){ br=new BufferedReader(new InputStreamReader(System.in)); }
+        FastReader() { br = new BufferedReader(new InputStreamReader(System.in)); }
         String next() throws IOException {
-            while (st==null||!st.hasMoreTokens()) st=new StringTokenizer(br.readLine());
+            while (st == null || !st.hasMoreTokens()) st = new StringTokenizer(br.readLine());
             return st.nextToken();
         }
         int nextInt() throws IOException { return Integer.parseInt(next()); }
