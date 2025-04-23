@@ -1,130 +1,15 @@
 from collections import defaultdict, deque
 from typing import Dict, Set, Tuple, List
 
-##############################
-# Part 1. Build the Complete DFA for Forbidden Substrings
-##############################
-
-class TrieNode:
-    def __init__(self):
-        self.children: Dict[str, TrieNode] = {}
-        self.fail: TrieNode = None  # failure link
-        self.output: bool = False   # True if any forbidden word ends here
-        self.state_id: int = None   # later assigned
-
-def build_trie(forbidden_words: List[str], alphabet: Set[str]) -> TrieNode:
-    """Creates a trie of forbidden words."""
-    root = TrieNode()
-    for word in forbidden_words:
-        node = root
-        for ch in word:
-            if ch not in node.children:
-                node.children[ch] = TrieNode()
-            node = node.children[ch]
-        node.output = True  # mark end of a forbidden word
-    return root
-
-def compute_failure_links(root: TrieNode, alphabet: Set[str]) -> None:
-    """Computes failure links to allow for a complete DFA (like in Aho-Corasick)."""
-    queue = deque()
-    # Set failure link for children of root to root
-    for ch in alphabet:
-        if ch in root.children:
-            child = root.children[ch]
-            child.fail = root
-            queue.append(child)
-        else:
-            # Implicitly add missing transitions to root
-            root.children[ch] = root
-
-    while queue:
-        current = queue.popleft()
-        # Propagate the output flag along the failure links:
-        if current.fail and current.fail.output:
-            current.output = True
-        for ch in alphabet:
-            if ch in current.children:
-                child = current.children[ch]
-                # The failure link of the child is the state you'd get from the failure of current
-                f = current.fail
-                # Follow failure links until we find a node with this transition
-                while ch not in f.children and f is not None:
-                    f = f.fail
-                child.fail = f.children[ch] if f and ch in f.children else root
-                queue.append(child)
-            else:
-                # Define missing transition: use current.fail's transition
-                current.children[ch] = current.fail.children[ch]
-
-def assign_state_ids(root: TrieNode) -> List[TrieNode]:
-    """Traverses the automaton (BFS) and assigns a unique state id to each node."""
-    queue = deque([root])
-    seen = set()
-    state_list = []
-    root.state_id = 0
-    seen.add(id(root))
-    state_list.append(root)
-    
-    while queue:
-        node = queue.popleft()
-        for child in node.children.values():
-            if id(child) not in seen:
-                seen.add(id(child))
-                child.state_id = len(state_list)
-                state_list.append(child)
-                queue.append(child)
-    return state_list
-
-def build_dfa(forbidden_words: List[str], alphabet: Set[str]) -> Tuple[Set[int], Dict[Tuple[int, str], int], int, Set[int]]:
-    """
-    Builds a complete DFA that recognizes any string containing a forbidden substring.
-    Returns a tuple (states, transitions, start_state, final_states).
-    """
-    # Build the trie and compute failure links
-    root = build_trie(forbidden_words, alphabet)
-    compute_failure_links(root, alphabet)
-    state_list = assign_state_ids(root)
-    
-    states = set(range(len(state_list)))
-    transitions = {}
-    final_states = set()
-    
-    for node in state_list:
-        sid = node.state_id
-        # If this node (or any by failure chain) is terminal, mark as accepting.
-        if node.output:
-            final_states.add(sid)
-        for ch in alphabet:
-            # Every node now has a defined transition by construction.
-            next_state = node.children[ch].state_id
-            transitions[(sid, ch)] = next_state
-            
-    start_state = root.state_id
-    return states, transitions, start_state, final_states
-
-##############################
-# Part 2. DFA Minimization via Hopcroft's Algorithm
-##############################
-
-class DFA:
+class Automata:
     def __init__(self, states: Set[int], alphabet: Set[str],
-                 transition: Dict[Tuple[int, str], int],
-                 start: int, final: Set[int]):
+                 transition: Dict[Tuple[int, str], int]):
         self.states = states
         self.alphabet = alphabet
         self.transition = transition  # mapping: (state, symbol) -> state
-        self.start = start
-        self.final = final
 
     def __str__(self):
-        # Header information: start state and final states.
-        lines = [
-            "DFA:",
-            f"  Start State: {self.start}",
-            f"  Final States: {sorted(list(self.final))}",
-            "  Transitions:"
-        ]
-        
+        lines = ["  Transitions:"]
         # List transitions in a sorted order for reproducibility.
         for state in sorted(self.states):
             for symbol in sorted(self.alphabet):
@@ -133,7 +18,78 @@ class DFA:
                 lines.append(f"    δ({state}, '{symbol}') = {next_state}")
             lines.append('')
         return "\n".join(lines)
+
+class DFA(Automata):
+    def __init__(self, states: Set[int], alphabet: Set[str],
+                 transition: Dict[Tuple[int, str], int],
+                 start: int, final: Set[int]):
+        super().__init__(states, alphabet, transition)
+        self.start = start
+        self.final = final
+
+    def __str__(self):
+        # Header information: start state and final states.
+        lines = [
+            "DFA:",
+            f"  Start State: {self.start}",
+            f"  Final States: {sorted(list(self.final))}"
+        ]
+        return '\n'.join(lines) + super().__str__()
+
+class DoubleStartDFA(Automata):
+    def __init__(self, states: Set, alphabet: Set,
+                 transition: Dict,
+                 start1: int, start2: int, final: Set):
+        super().__init__(states, alphabet, transition)
+        self.start1 = start1
+        self.start2 = start2
+        self.final = final
+
+    def __str__(self):
+        # Header information: start state and final states.
+        lines = [
+            "Double Start DFA:",
+            f"  Start State 1: {self.start1}",
+            f"  Start State 2: {self.start2}"
+            f"  Final States: {sorted(list(self.final))}"
+        ]
+        return '\n'.join(lines) + super().__str__()
+
+class MultiFinalDFA(Automata):
+    def __init__(self, states: Set, alphabet: Set,
+                 transition: Dict,
+                 start: int, partition: Dict):
+        super().__init__(states, alphabet, transition)
+        self.start = start
+        self.partition = partition # mapping: state -> which partition it is in (int)
     
+    def __str__(self):
+        # Header information: start state and final states.
+        lines = [
+            "MultiFinal DFA:",
+            f"  Start State: {self.start}",
+            f"  State Partition: {self.partition}", ''
+        ]
+        return '\n'.join(lines) + super().__str__()
+
+
+def convert_double_start_to_double_final_dfa(dfa: DoubleStartDFA) -> MultiFinalDFA:
+    # Every pair of states is a state in the new DFA
+    new_states = {(p,q) for p in dfa.states for q in dfa.states}
+
+    new_transition = {}
+    for p, q in new_states:
+        for c in dfa.alphabet:
+            new_transition[((p,q), c)] = (dfa.transition[(p, c)], dfa.transition[(q, c)])
+
+    new_start = (dfa.start1, dfa.start2)
+
+    partition = {
+        (p,q): len(set(pair) & dfa.final) for pair in new_states
+    }
+
+    return MultiFinalDFA(new_states, dfa.alphabet, new_transition, new_start, partition)
+
 def hopcroft_minimization(dfa: DFA) -> List[Set[int]]:
     """
     Performs DFA minimization using Hopcroft's algorithm.
@@ -211,7 +167,7 @@ def build_minimized_dfa(dfa: DFA, partitions: List[Set[int]]) -> DFA:
     return DFA(new_states, dfa.alphabet, new_transition, new_start, new_final)
 
 ##############################
-# Part 3. Query Processing
+# Query Processing
 ##############################
 
 def query_dfa(dfa: DFA, query: str) -> bool:
@@ -222,13 +178,42 @@ def query_dfa(dfa: DFA, query: str) -> bool:
     current_state = dfa.start
     for ch in query:
         if ch not in dfa.alphabet:
-            # If symbol not in alphabet, you might decide to skip it,
-            # or alternatively, treat it as a dead symbol leading to a sink.
-            continue
+            raise ValueError(f'Unrecognized character in DFA: {ch}')
         current_state = dfa.transition[(current_state, ch)]
         if current_state in dfa.final:
             return True
     return False
+
+##############################
+# Input Handling
+##############################
+
+def get_double_start_dfa_from_input() -> DoubleStartDFA:
+    # First line is the number of states
+    n = int(input())
+    states = set(range(n))
+
+    # Alphabet is always {a,b}
+    alphabet = {'a', 'b'}
+
+    # Transition is given line-by-line
+    transition = {}
+    print(n)
+    for _ in range(n*len(alphabet)):
+        state, ch, next_state = input().strip().split(' ')
+        state = int(state)
+        next_state = int(next_state)
+        transition[(state, ch)] = next_state
+    
+    # Next line are start states
+    starts = [int(q) for q in input().split(' ')]
+    start1, start2 = starts
+
+    # Finally, the next line has the final states
+    final = {int(q) for q in input().strip().split(' ')}
+
+    return DoubleStartDFA(states, alphabet, transition, start1, start2, final)
+
 
 ##############################
 # Main: Putting Everything Together
