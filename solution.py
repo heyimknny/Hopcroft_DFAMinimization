@@ -378,7 +378,7 @@ def load_mf_dfa(path: str) -> MultiFinalDFA:
     transition = {}
     alphabet = {'a', 'b'}
     for _ in range(len(alphabet) * n):
-        p, c, q = next(it)
+        p, c, q = next(it).split(' ')
         p, q = int(p), int(q)
         transition[(p, c)] = q
     
@@ -390,10 +390,10 @@ def load_mf_dfa(path: str) -> MultiFinalDFA:
     partition.update({int(next(it)): 'Rejecting' for _ in range(r)})
     # half-accepting states
     h = int(next(it))
-    partition.update({int(next(it)): 'Half-Accepting' for _ in range(r)})
+    partition.update({int(next(it)): 'Half-Accepting' for _ in range(h)})
     # accepting states
     a = int(next(it))
-    partition.update({int(next(it)): 'Accepting' for _ in range(r)})
+    partition.update({int(next(it)): 'Accepting' for _ in range(a)})
 
     return MultiFinalDFA(set(range(n)), alphabet, transition, start, partition)
 
@@ -401,7 +401,6 @@ def load_mf_dfa(path: str) -> MultiFinalDFA:
 def equivalent_dfa(d1: MultiFinalDFA, d2: MultiFinalDFA) -> bool:
     """
     Check language equivalence of two DFAs via BFS on the product automaton.
-    Accepting = partition > 0.
     """
     if d1.alphabet != d2.alphabet:
         print(f"Alphabet mismatch: {d1.alphabet} vs {d2.alphabet}")
