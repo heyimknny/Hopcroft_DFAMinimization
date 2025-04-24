@@ -103,8 +103,10 @@ def all_strings(alphabet, max_len):
 
 # 7. Parameterized test reading from input files for language equivalence
 @pytest.mark.parametrize("input_file, max_len", [
-    ("sample.in", 6),
-    # Add more ("filename.in", max_len) pairs here
+    ("io/sample.in", 6),
+    ("io/simple.in", 2),
+    ("io/no_final.in", 6),
+    ("io/all_final.in", 6),
 ])
 def test_language_equivalence(input_file, max_len, monkeypatch):
     # Redirect stdin to read from the given file
@@ -113,6 +115,7 @@ def test_language_equivalence(input_file, max_len, monkeypatch):
 
     # Build and transform
     orig = get_double_start_dfa_from_input()
+    print(orig)
     minimized = convert_ds_to_mf_minimized(orig)
 
     # For each string up to length 6, ensure acceptance matches

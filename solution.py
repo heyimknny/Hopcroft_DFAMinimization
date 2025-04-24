@@ -340,8 +340,9 @@ def get_double_start_dfa_from_input() -> DoubleStartDFA:
     starts = [int(q) for q in input().split(' ')]
     start1, start2 = starts
 
-    # Finally, the next line has the final states
-    final = {int(q) for q in input().strip().split(' ')}
+    # Finally, the next lines have the final states
+    final_count = int(input())
+    final = {int(input()) for _ in range(final_count)}
 
     return DoubleStartDFA(states, alphabet, transition, start1, start2, final)
 
