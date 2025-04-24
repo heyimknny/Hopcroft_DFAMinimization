@@ -316,24 +316,6 @@ def build_minimized_automata(dfa: Automata, partitions: List[Set[int]]) -> Autom
     return result
 
 ##############################
-# Query Processing
-##############################
-
-def query_dfa(dfa: DFA, query: str) -> bool:
-    """
-    Simulates the DFA on the given query string.
-    Returns True if the query reaches an accepting state, else False.
-    """
-    current_state = dfa.start
-    for ch in query:
-        if ch not in dfa.alphabet:
-            raise ValueError(f'Unrecognized character in DFA: {ch}')
-        current_state = dfa.transition[(current_state, ch)]
-        if current_state in dfa.final:
-            return True
-    return False
-
-##############################
 # Input Handling
 ##############################
 
@@ -363,42 +345,12 @@ def get_double_start_dfa_from_input() -> DoubleStartDFA:
 
     return DoubleStartDFA(states, alphabet, transition, start1, start2, final)
 
-
-##############################
-# Main: Putting Everything Together
-##############################
-
-def main():
-    # Example forbidden words and alphabet
-    forbidden_words = ["bad", "hate", "spam", "over", "ridiculous", "one", "two", "three"]
-    alphabet = set("abcdefghijklmnopqrstuvwxyz ")  # including space if needed
-    
-    # Build full DFA from forbidden words
-    states, transitions, start_state, final_states = build_dfa(forbidden_words, alphabet)
-    full_dfa = DFA(states, alphabet, transitions, start_state, final_states)
-    # print(f'Full DFA:\n{full_dfa}')
-    print(f'Full DFA states:\n{full_dfa.states}')
-    
-    # Minimize the DFA using Hopcroft's algorithm
-    partitions = hopcroft_minimization(full_dfa)
-    print(f'Partitions: {partitions}')
-    minimized_dfa = build_minimized_dfa(full_dfa, partitions)
-    # print(f'Min DFA:\n{minimized_dfa}')
-    print(f'Min DFA states:\n{minimized_dfa.states}')
-
-    # Example queries
-    queries = [
-        "I had a bad day",
-        "This is absolutely great",
-        "I really hate when it rains",
-        "No issues here"
-    ]
-    
-    print("Forbidden Words:", forbidden_words)
-    print("\nQuery Results:")
-    for q in queries:
-        result = query_dfa(minimized_dfa, q.lower())  # use lower-case for consistency with alphabet
-        print(f"'{q}': {result}")
-
-if __name__ == "__main__":
-    main()
+def convert_ds_to_mf_minimized(double_dfa: DoubleStartDFA) -> MultiFinalDFA:
+    dfa = remove_unreachable_states(double_dfa)
+    partitions = hopcroft_minimization(dfa)
+    dfa = build_minimized_automata(dfa, partitions)
+    dfa = convert_double_start_to_multi_final_dfa(dfa)
+    dfa = remove_unreachable_states(dfa)
+    partitions = hopcroft_minimization(dfa)
+    dfa = build_minimized_automata(dfa, partitions)
+    return dfa

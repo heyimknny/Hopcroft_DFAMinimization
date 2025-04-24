@@ -1,6 +1,15 @@
 # Bug Fixes
 # 1. In DoubleStartDFA.__str__, a missing comma caused the "Start State 2" and "Final States" lines to concatenate. Fixed signature below.
 
+# test_automata.py
+import sys
+from io import StringIO
+from solution import (
+    get_double_start_dfa_from_input,
+    convert_ds_to_mf_minimized
+)
+import itertools
+
 
 # test_automata.py
 import pytest
@@ -49,8 +58,7 @@ def test_convert_double_start_to_double_final():
     md = convert_double_start_to_multi_final_dfa(dfa)
     # New start should be pair (0,1)
     assert md.start == (0, 1)
-    # Partition for (0,1): one of the pair is final, so partition value == 1
-    assert md.partition[(0,1)] == 1
+    assert md.partition[(0,1)] == 'Half-Accepting'
 
 # 5. Test Hopcroft minimization on a simple 2-state DFA
 def test_hopcroft_minimization():
@@ -84,3 +92,37 @@ def test_minimization_example_partitions():
     expected_blocks = [{4,5}, {6,7}, {0}, {2}, {1,3}]
     assert len(parts) == 5
     assert all(any(block == exp for block in parts) for exp in expected_blocks)
+
+# 7. Test language equivalence via convert_ds_to_mf_minimized
+
+def all_strings(alphabet, max_len):
+    for length in range(max_len + 1):
+        for prod in itertools.product(sorted(alphabet), repeat=length):
+            yield ''.join(prod)
+
+
+# 7. Parameterized test reading from input files for language equivalence
+@pytest.mark.parametrize("input_file, max_len", [
+    ("sample.in", 6),
+    # Add more ("filename.in", max_len) pairs here
+])
+def test_language_equivalence(input_file, max_len, monkeypatch):
+    # Redirect stdin to read from the given file
+    f = open(input_file, 'r')
+    monkeypatch.setattr(sys, 'stdin', f)
+
+    # Build and transform
+    orig = get_double_start_dfa_from_input()
+    minimized = convert_ds_to_mf_minimized(orig)
+
+    # For each string up to length 6, ensure acceptance matches
+    for s in all_strings(orig.alphabet, max_len):
+        part_names = ['Rejecting', 'Half-Accepting', 'Accepting']
+        orig_acc = part_names[sum(orig.extended_transition(s, start_no=i) in orig.final for i in [1,2])]
+
+        new_end = minimized.extended_transition(s)
+        new_acc = minimized.partition[new_end]
+
+        assert orig_acc == new_acc, (
+            f"Mismatch on input '{s}': ``orig_acc={orig_acc}`` vs ``new_acc={new_acc}``"
+        )
