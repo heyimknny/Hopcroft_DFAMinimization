@@ -40,6 +40,5 @@ def test():
     partitions = hopcroft_minimization(dfa)
     dfa = build_minimized_automata(dfa, partitions)
     print(dfa)
-    breakpoint()
 
 test()

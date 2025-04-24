@@ -68,7 +68,7 @@ def write_dfa_to_file(num_states):
         file.write(generate_random_double_start_dfa_input(num_states))
 
 def main():
-    for num_states in [5,10,25,50,100,500,1000,5000]:
+    for num_states in [5,10,25,50,100,200,300]:
         write_dfa_to_file(num_states)
 
 if __name__ == '__main__':

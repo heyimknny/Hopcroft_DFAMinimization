@@ -1,6 +1,7 @@
 from collections import defaultdict, deque
 from typing import Dict, Set, Tuple, List, Optional
 from collections import defaultdict
+import sys, os
 
 class Automata:
     def __init__(self, states: Set[int], alphabet: Set[str],
@@ -328,7 +329,6 @@ def get_double_start_dfa_from_input() -> DoubleStartDFA:
 
     # Transition is given line-by-line
     transition = {}
-    print(n)
     for _ in range(n*len(alphabet)):
         state, ch, next_state = input().strip().split(' ')
         state = int(state)
@@ -344,6 +344,94 @@ def get_double_start_dfa_from_input() -> DoubleStartDFA:
     final = {int(input()) for _ in range(final_count)}
 
     return DoubleStartDFA(states, alphabet, transition, start1, start2, final)
+
+# verify_outputs.py
+# Usage: python3 verify_outputs.py [io_dir] [test_prefix] [true_prefix]
+# verify_outputs.py
+# Usage: python3 verify_outputs.py [io_dir] [test_prefix] [true_prefix]
+
+from collections import deque
+
+def load_mf_dfa(path: str) -> MultiFinalDFA:
+    """
+    Load a MultiFinalDFA from a serialized .out file in the format:
+      n
+      p c q    (one line per transition)
+      ...
+      start    (single int)
+      r        (number of rejecting states)
+      ...      (rejecting states)
+      h        (number of half-accepting states)
+      ...      (half-accepting states)
+      a        (number of accepting states)
+      ...      (accepting states)
+    Partitions: 0=rejecting, 1=half-accepting, 2=accepting.
+    """
+    with open(path) as f:
+        lines = [line.strip() for line in f if line.strip()]
+    it = iter(lines)
+
+    # Number of states
+    n = int(next(it))
+
+    # Transitions: expect n * |alphabet| lines of 'p c q'
+    transition = {}
+    alphabet = {'a', 'b'}
+    for _ in range(len(alphabet) * n):
+        p, c, q = next(it)
+        p, q = int(p), int(q)
+        transition[(p, c)] = q
+    
+    start = int(next(it))
+    
+    partition = {}
+    # rejecting states
+    r = int(next(it))
+    partition.update({int(next(it)): 'Rejecting' for _ in range(r)})
+    # half-accepting states
+    h = int(next(it))
+    partition.update({int(next(it)): 'Half-Accepting' for _ in range(r)})
+    # accepting states
+    a = int(next(it))
+    partition.update({int(next(it)): 'Accepting' for _ in range(r)})
+
+    return MultiFinalDFA(set(range(n)), alphabet, transition, start, partition)
+
+
+def equivalent_dfa(d1: MultiFinalDFA, d2: MultiFinalDFA) -> bool:
+    """
+    Check language equivalence of two DFAs via BFS on the product automaton.
+    Accepting = partition > 0.
+    """
+    if d1.alphabet != d2.alphabet:
+        print(f"Alphabet mismatch: {d1.alphabet} vs {d2.alphabet}")
+        return False
+
+    seen = set()
+    queue = deque([(d1.start, d2.start)])
+    while queue:
+        s1, s2 = queue.popleft()
+        if (s1, s2) in seen:
+            continue
+        seen.add((s1, s2))
+
+        f1 = d1.partition[s1]
+        f2 = d2.partition[s2]
+        if f1 != f2:
+            print(f"Distinguishing at ({s1},{s2}): {f1} vs {f2}")
+            return False
+
+        for a in sorted(d1.alphabet):
+            t1 = d1.transition.get((s1, a))
+            t2 = d2.transition.get((s2, a))
+            if t1 is None or t2 is None:
+                if t1 != t2:
+                    print(f"Missing transition for '{a}' at ({s1},{s2}): {t1} vs {t2}")
+                    return False
+                continue
+            queue.append((t1, t2))
+    return True
+
 
 def get_md_output_format(dfa: MultiFinalDFA) -> str:
     """
@@ -369,11 +457,12 @@ def get_md_output_format(dfa: MultiFinalDFA) -> str:
     # Start
     lines.append(str(dfa.start))
 
-    partition_list = dfa.get_partition_list()
-    for part in partition_list:
+    parts = dfa.get_reversed_paritions()
+    for part_name in ['Rejecting', 'Half-Accepting', 'Accepting']:
+        part = parts[part_name]
         lines.append(str(len(part)))
         for p in part:
-            lines.append(p)
+            lines.append(str(p))
     return "\n".join(lines)
 
 
@@ -391,3 +480,44 @@ def full_pipeline():
     orig = get_double_start_dfa_from_input()
     minimized = convert_ds_to_mf_minimized(orig)
     print(get_md_output_format(minimized))
+
+import time 
+
+def timed_full_pipeline():
+    start = time.perf_counter()        # high-res timer
+    full_pipeline()
+    end   = time.perf_counter()
+    return end - start
+
+def main():
+    full_pipeline()
+
+def write_to_out(in_path: str):
+    out_path = in_path.replace('.in', '.out')
+    # back up real stdin/stdout
+    real_stdin, real_stdout = sys.stdin, sys.stdout
+    time_elapsed = 0
+    try:
+        # open the .in for reading as stdin
+        sys.stdin = open(in_path, 'r')
+        # open the .out for writing as stdout
+        sys.stdout = open(out_path, 'w')
+        time_elapsed = timed_full_pipeline()        # this will read from stdin and write to stdout
+    finally:
+        # close the fds we opened
+        sys.stdin.close()
+        sys.stdout.close()
+        # restore
+        sys.stdin, sys.stdout = real_stdin, real_stdout
+    print(f'{time_elapsed:.6f}s')
+
+def write_all_in_to_out():
+    for fn in os.listdir('io'):
+        if fn.endswith('.in'):
+            if any(str(n) in fn for n in [200, 300]):  #skip the long ones for now
+                continue
+            print(f'{fn:<20}', end=' | ', flush=True)
+            write_to_out(os.path.join('io', fn))
+
+if __name__ == '__main__':
+    write_all_in_to_out()
