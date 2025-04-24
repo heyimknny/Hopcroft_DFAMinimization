@@ -65,10 +65,11 @@ def generate_random_double_start_dfa_input(
 
 def write_dfa_to_file(num_states):
     with open(f'io/random{num_states}.in', 'w') as file:
-        file.write(generate_random_double_start_dfa_input(num_states))
+        file.write(generate_random_double_start_dfa_input(num_states, seed=42))
 
 def main():
-    for num_states in [5,10,25,50,100,200,300]:
+    for num_states in [5,10,15,20,30,80,100,150,200,250,300]:
+        # Note: we exclude 50 because we manually altered that to make test equivalence checker
         write_dfa_to_file(num_states)
 
 if __name__ == '__main__':

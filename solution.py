@@ -522,8 +522,8 @@ def write_to_out(in_path: str):
 def write_all_in_to_out():
     for fn in os.listdir('io'):
         if fn.endswith('.in'):
-            if any(str(n) in fn for n in [200, 300]):  #skip the long ones for now
-                continue
+            # if any(str(n) in fn for n in [200, 300]):  #skip the long ones for now
+            #     continue
             print(f'{fn:<20}', end=' | ', flush=True)
             write_to_out(os.path.join('io', fn))
 
