@@ -138,7 +138,6 @@ class MultiFinalDFA(Automata):
         ]
         return '\n'.join(lines) + super().__str__()
 
-
 def convert_double_start_to_multi_final_dfa(dfa: DoubleStartDFA) -> MultiFinalDFA:
     # Every pair of states is a state in the new DFA
     new_states = {(p,q) for p in dfa.states for q in dfa.states}
@@ -346,6 +345,38 @@ def get_double_start_dfa_from_input() -> DoubleStartDFA:
 
     return DoubleStartDFA(states, alphabet, transition, start1, start2, final)
 
+def get_md_output_format(dfa: MultiFinalDFA) -> str:
+    """
+    Serialize this MultiFinalDFA into the standard output format:
+    - Line 1: |states|
+    - Next |states| * |alphabet| lines: "p c q"
+    - Next line: single start state
+    - Next line: number of Rejecting states
+    - Next lines: each rejecting state on its own line
+    - Next line: number of Half-Accepting states
+    - Next lines: each half-accepting state on its own line
+    - Next line: number of Accepting states
+    - Next lines: each accepting state on its own line
+    """
+    # Number of states
+    n = len(dfa.states)
+    # Transitions
+    lines = [str(n)]
+    for p in sorted(dfa.states):
+        for c in sorted(dfa.alphabet):
+            q = dfa.transition.get((p, c))
+            lines.append(f"{p} {c} {q}")
+    # Start
+    lines.append(str(dfa.start))
+
+    partition_list = dfa.get_partition_list()
+    for part in partition_list:
+        lines.append(str(len(part)))
+        for p in part:
+            lines.append(p)
+    return "\n".join(lines)
+
+
 def convert_ds_to_mf_minimized(double_dfa: DoubleStartDFA) -> MultiFinalDFA:
     dfa = remove_unreachable_states(double_dfa)
     partitions = hopcroft_minimization(dfa)
@@ -355,3 +386,8 @@ def convert_ds_to_mf_minimized(double_dfa: DoubleStartDFA) -> MultiFinalDFA:
     partitions = hopcroft_minimization(dfa)
     dfa = build_minimized_automata(dfa, partitions)
     return dfa
+
+def full_pipeline():
+    orig = get_double_start_dfa_from_input()
+    minimized = convert_ds_to_mf_minimized(orig)
+    print(get_md_output_format(minimized))

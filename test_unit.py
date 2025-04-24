@@ -111,6 +111,14 @@ def all_strings(alphabet, max_len):
     ("io/unreachable.in", 6),
     ("io/same_start.in", 6),
     ("io/cycle.in", 10),
+    ("io/random5.in", 5),
+    ("io/random10.in", 10),
+    ("io/random25.in", 15),
+    ("io/random50.in", 15),
+    ("io/random100.in", 10),
+    # ("io/random500.in", 5),
+    # ("io/random1000.in", 5),
+    # ("io/random5000.in", 5),
 ])
 def test_language_equivalence(input_file, max_len, monkeypatch):
     # Redirect stdin to read from the given file
