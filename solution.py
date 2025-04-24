@@ -320,6 +320,15 @@ def build_minimized_automata(dfa: Automata, partitions: List[Set[int]]) -> Autom
 ##############################
 
 def get_double_start_dfa_from_input() -> DoubleStartDFA:
+    """
+    Load a DoubleStartDFA from a serialized stdin in the format:
+      n        (numer of states)
+      p c q    (one line per transition)
+      ...
+      s1 s2    (the two start states, ints)
+      f        (number of final states)
+      q        (one line per final state)
+    """
     # First line is the number of states
     n = int(input())
     states = set(range(n))
