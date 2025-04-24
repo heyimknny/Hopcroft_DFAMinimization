@@ -8,6 +8,12 @@ class Automata:
         self.alphabet = alphabet
         self.transition = transition  # mapping: (state, symbol) -> state
 
+    def relabel(self):
+        self._state_to_id = {q: i for i, q in enumerate(self.states)}
+        self.states = set(range(len(self.states)))
+        self.transition = {(self._state_to_id[p], c): self._state_to_id[q] for (p,c),q in self.transition.items()}
+        return self
+
     def __str__(self):
         lines = ["  Transitions:"]
         # List transitions in a sorted order for reproducibility.
@@ -27,6 +33,12 @@ class DFA(Automata):
         self.start = start
         self.final = final
 
+    def relabel(self):
+        super().relabel()
+        self.start = self._state_to_id[self.start]
+        self.final = {self._state_to_id[q] for q in self.final}
+        return self
+
     def __str__(self):
         # Header information: start state and final states.
         lines = [
@@ -45,6 +57,13 @@ class DoubleStartDFA(Automata):
         self.start2 = start2
         self.final = final
 
+    def relabel(self):
+        super().relabel()
+        self.start1 = self._state_to_id[self.start1]
+        self.start2 = self._state_to_id[self.start2]
+        self.final = {self._state_to_id[q] for q in self.final}
+        return self
+
     def __str__(self):
         # Header information: start state and final states.
         lines = [
@@ -62,7 +81,13 @@ class MultiFinalDFA(Automata):
         super().__init__(states, alphabet, transition)
         self.start = start
         self.partition = partition # mapping: state -> which partition it is in (int)
-    
+
+    def relabel(self):
+        super().relabel()
+        self.start = self._state_to_id[self.start]
+        self.partition = {self._state_to_id[q]: part for q, part in self.partition.items()}
+        return self
+
     def __str__(self):
         # Header information: start state and final states.
         lines = [
@@ -85,18 +110,30 @@ def convert_double_start_to_double_final_dfa(dfa: DoubleStartDFA) -> MultiFinalD
     new_start = (dfa.start1, dfa.start2)
 
     partition = {
-        (p,q): len(set(pair) & dfa.final) for pair in new_states
+        pair: len(set(pair) & dfa.final) for pair in new_states
     }
 
     return MultiFinalDFA(new_states, dfa.alphabet, new_transition, new_start, partition)
 
-def hopcroft_minimization(dfa: DFA) -> List[Set[int]]:
+def hopcroft_minimization(dfa: Automata) -> List[Set[int]]:
     """
     Performs DFA minimization using Hopcroft's algorithm.
     Returns a list of sets, where each set is an equivalence class of states.
     """
-    # Initialize partition: final vs. non-final states.
-    P = [dfa.final, dfa.states - dfa.final]
+    # Initialize partition
+    P = []
+    match dfa:
+        case MultiFinalDFA():
+            P_dict = defaultdict(set)
+            print(f'dfa.partition: {dfa.partition}')
+            for q, part in dfa.partition.items():
+                P_dict[part].add(q)
+            P = list(P_dict.values())
+            print(f"initial P: {P}")
+        case DFA() | DoubleStartDFA():
+            P = [dfa.final, dfa.states - dfa.final]
+        case _:
+            raise ValueError(f'Unrecognized dfa type')
     # Remove empty set if exists.
     P = [block for block in P if block]
     
@@ -138,7 +175,7 @@ def hopcroft_minimization(dfa: DFA) -> List[Set[int]]:
     
     return P
 
-def build_minimized_dfa(dfa: DFA, partitions: List[Set[int]]) -> DFA:
+def build_minimized_automata(dfa: Automata, partitions: List[Set[int]]) -> Automata:
     """
     Given the original DFA and its partitions (equivalence classes), builds a new minimized DFA.
     """
@@ -149,22 +186,50 @@ def build_minimized_dfa(dfa: DFA, partitions: List[Set[int]]) -> DFA:
             state_to_block[state] = i
 
     new_states = set(range(len(partitions)))
-    new_start = state_to_block[dfa.start]
-    new_final = set()
+    new_start: set
+    new_start1: set
+    new_start2: set
+    match dfa:
+        case DFA() | MultiFinalDFA():
+            new_start = state_to_block[dfa.start]
+        case DoubleStartDFA():
+            new_start1 = state_to_block[dfa.start1]
+            new_start2 = state_to_block[dfa.start2]
+        case _:
+            raise ValueError(f'Unrecognized dfa type')
+
     new_transition = {}
 
     # For each block, use one representative state (any from the block) to define transitions.
     representatives = {i: next(iter(block)) for i, block in enumerate(partitions)}
     
     for block_id, rep in representatives.items():
-        # If the representative is accepting, then the whole block is accepting.
-        if rep in dfa.final:
-            new_final.add(block_id)
         for ch in dfa.alphabet:
             target = dfa.transition[(rep, ch)]
             new_transition[(block_id, ch)] = state_to_block[target]
+    
+    new_final: set
+    new_partition: Dict
+    match dfa:
+        case DFA() | DoubleStartDFA():
+            new_final = {block_id for block_id, rep in representatives.items() if rep in dfa.final}
+        case MultiFinalDFA():
+            new_partition = {block_id: dfa.partition[rep] for block_id, rep in representatives.items()}
+        case _:
+            raise ValueError(f'Unrecognized dfa type')
 
-    return DFA(new_states, dfa.alphabet, new_transition, new_start, new_final)
+    result: Automata
+    match dfa:
+        case DFA():
+            result = DFA(new_states, dfa.alphabet, new_transition, new_start, new_final) 
+        case MultiFinalDFA():
+            result = MultiFinalDFA(new_states, dfa.alphabet, new_transition, new_start, new_partition)
+        case DoubleStartDFA():
+            result = DoubleStartDFA(new_states, dfa.alphabet, new_transition, new_start1, new_start2, new_final)
+        case _:
+            raise ValueError(f'Unrecognized dfa type')
+
+    return result
 
 ##############################
 # Query Processing
@@ -219,7 +284,7 @@ def get_double_start_dfa_from_input() -> DoubleStartDFA:
 # Main: Putting Everything Together
 ##############################
 
-if __name__ == "__main__":
+def main():
     # Example forbidden words and alphabet
     forbidden_words = ["bad", "hate", "spam", "over", "ridiculous", "one", "two", "three"]
     alphabet = set("abcdefghijklmnopqrstuvwxyz ")  # including space if needed
@@ -250,3 +315,6 @@ if __name__ == "__main__":
     for q in queries:
         result = query_dfa(minimized_dfa, q.lower())  # use lower-case for consistency with alphabet
         print(f"'{q}': {result}")
+
+if __name__ == "__main__":
+    main()
