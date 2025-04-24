@@ -1,5 +1,6 @@
 from collections import defaultdict, deque
-from typing import Dict, Set, Tuple, List
+from typing import Dict, Set, Tuple, List, Optional
+from collections import defaultdict
 
 class Automata:
     def __init__(self, states: Set[int], alphabet: Set[str],
@@ -11,8 +12,21 @@ class Automata:
     def relabel(self):
         self._state_to_id = {q: i for i, q in enumerate(self.states)}
         self.states = set(range(len(self.states)))
-        self.transition = {(self._state_to_id[p], c): self._state_to_id[q] for (p,c),q in self.transition.items()}
+        self.transition = {(self._state_to_id[p], c): self._state_to_id[q]
+                           for (p, c), q in self.transition.items()}
         return self
+
+    def extended_transition(self, input_string: str, start_state: Optional[int] = None) -> Optional[int]:
+        if start_state is None:
+            raise ValueError("A start_state must be provided for Automata extended_transition.")
+        state = start_state
+        for symbol in input_string:
+            if symbol not in self.alphabet:
+                raise ValueError(f"Symbol '{symbol}' not in alphabet.")
+            state = self.transition.get((state, symbol))
+            if state is None:
+                return None
+        return state
 
     def __str__(self):
         lines = ["  Transitions:"]
@@ -39,6 +53,9 @@ class DFA(Automata):
         self.final = {self._state_to_id[q] for q in self.final}
         return self
 
+    def extended_transition(self, input_string: str) -> Optional[int]:
+        return super().extended_transition(input_string, self.start)
+
     def __str__(self):
         # Header information: start state and final states.
         lines = [
@@ -49,9 +66,9 @@ class DFA(Automata):
         return '\n'.join(lines) + super().__str__()
 
 class DoubleStartDFA(Automata):
-    def __init__(self, states: Set, alphabet: Set,
-                 transition: Dict,
-                 start1: int, start2: int, final: Set):
+    def __init__(self, states: Set[int], alphabet: Set[str],
+                 transition: Dict[Tuple[int, str], int],
+                 start1: int, start2: int, final: Set[int]):
         super().__init__(states, alphabet, transition)
         self.start1 = start1
         self.start2 = start2
@@ -64,6 +81,14 @@ class DoubleStartDFA(Automata):
         self.final = {self._state_to_id[q] for q in self.final}
         return self
 
+    def extended_transition(self, input_string: str, start_no: int = 1) -> Optional[int]:
+        if start_no == 1:
+            return super().extended_transition(input_string, self.start1)
+        elif start_no == 2:
+            return super().extended_transition(input_string, self.start2)
+        else:
+            raise ValueError("start_no must be 1 or 2 for DoubleStartDFA.")
+
     def __str__(self):
         lines = [
             "Double Start DFA:",
@@ -74,12 +99,12 @@ class DoubleStartDFA(Automata):
         return "\n".join(lines) + super().__str__()
 
 class MultiFinalDFA(Automata):
-    def __init__(self, states: Set, alphabet: Set,
-                 transition: Dict,
-                 start: int, partition: Dict):
+    def __init__(self, states: Set[int], alphabet: Set[str],
+                 transition: Dict[Tuple[int, str], int],
+                 start: int, partition: Dict[int, str]):
         super().__init__(states, alphabet, transition)
         self.start = start
-        self.partition = partition # mapping: state -> which partition it is in (int)
+        self.partition = partition # mapping: state -> which partition it is in
 
     def relabel(self):
         super().relabel()
@@ -87,23 +112,34 @@ class MultiFinalDFA(Automata):
         self.partition = {self._state_to_id[q]: part for q, part in self.partition.items()}
         return self
 
-    def __str__(self):
-        # Header information: start state and final states.
-        lines = [
-            "MultiFinal DFA:",
-            f"  Start State: {self.start}",
-            f"  State Partition: {self.get_partition_list()}", ''
-        ]
-        return '\n'.join(lines) + super().__str__()
-    
-    def get_partition_list(self):
+    def extended_transition(self, input_string: str) -> Optional[int]:
+        return super().extended_transition(input_string, self.start)
+
+    def get_partition_list(self) -> List[Set[int]]:
+        return list(self.get_reversed_paritions().values())
+
+    def get_reversed_paritions(self) -> dict:
         P_dict = defaultdict(set)
         for q, part in self.partition.items():
             P_dict[part].add(q)
-        return list(P_dict.values())
+        return P_dict
+
+    def get_formatted_partitions(self) -> str:
+        lines = []
+        for part, states in self.get_reversed_paritions().items():
+            lines.append(f'\t{part}: {states}')
+        return '\n'.join(lines)
+
+    def __str__(self):
+        lines = [
+            "MultiFinal DFA:",
+            f"  Start State: {self.start}",
+            f"  State Partition: \n{self.get_formatted_partitions()}", ''
+        ]
+        return '\n'.join(lines) + super().__str__()
 
 
-def convert_double_start_to_double_final_dfa(dfa: DoubleStartDFA) -> MultiFinalDFA:
+def convert_double_start_to_multi_final_dfa(dfa: DoubleStartDFA) -> MultiFinalDFA:
     # Every pair of states is a state in the new DFA
     new_states = {(p,q) for p in dfa.states for q in dfa.states}
 
@@ -114,8 +150,10 @@ def convert_double_start_to_double_final_dfa(dfa: DoubleStartDFA) -> MultiFinalD
 
     new_start = (dfa.start1, dfa.start2)
 
+    name_of_part = ['Rejecting', 'Half-Accepting', 'Accepting']
+
     partition = {
-        pair: len(set(pair) & dfa.final) for pair in new_states
+        pair: name_of_part[sum(q in dfa.final for q in pair)] for pair in new_states
     }
 
     return MultiFinalDFA(new_states, dfa.alphabet, new_transition, new_start, partition)

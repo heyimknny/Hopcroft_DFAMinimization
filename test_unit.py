@@ -4,7 +4,7 @@
 
 # test_automata.py
 import pytest
-from solution import DFA, DoubleStartDFA, MultiFinalDFA, remove_unreachable_states, convert_double_start_to_double_final_dfa, hopcroft_minimization
+from solution import DFA, DoubleStartDFA, MultiFinalDFA, remove_unreachable_states, convert_double_start_to_multi_final_dfa, hopcroft_minimization
 
 # 1. Test relabel for a simple DFA
 def test_dfa_relabel():
@@ -46,7 +46,7 @@ def test_convert_double_start_to_double_final():
     alphabet = {'a'}
     transition = {(0,'a'): 0, (1,'a'): 1}
     dfa = DoubleStartDFA(states, alphabet, transition, 0, 1, {1})
-    md = convert_double_start_to_double_final_dfa(dfa)
+    md = convert_double_start_to_multi_final_dfa(dfa)
     # New start should be pair (0,1)
     assert md.start == (0, 1)
     # Partition for (0,1): one of the pair is final, so partition value == 1
@@ -62,3 +62,25 @@ def test_hopcroft_minimization():
     # Expect two blocks: {0} (final) and {1} (non-final)
     assert any(block == {0} for block in parts)
     assert any(block == {1} for block in parts)
+
+# 6. Test minimization partitions for the provided example input
+def test_minimization_example_partitions():
+    # Build the DoubleStartDFA from the provided example
+    states = set(range(8))
+    alphabet = {'a','b'}
+    transition = {
+        (0,'a'):1, (0,'b'):2,
+        (1,'a'):3, (1,'b'):4,
+        (2,'a'):5, (2,'b'):6,
+        (3,'a'):1, (3,'b'):4,
+        (4,'a'):4, (4,'b'):5,
+        (5,'a'):4, (5,'b'):5,
+        (6,'a'):7, (6,'b'):7,
+        (7,'a'):6, (7,'b'):6,
+    }
+    dfa = DoubleStartDFA(states, alphabet, transition, 0, 2, {4,5})
+    trimmed = remove_unreachable_states(dfa)
+    parts = hopcroft_minimization(trimmed)
+    expected_blocks = [{4,5}, {6,7}, {0}, {2}, {1,3}]
+    assert len(parts) == 5
+    assert all(any(block == exp for block in parts) for exp in expected_blocks)
