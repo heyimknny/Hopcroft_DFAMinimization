@@ -107,6 +107,10 @@ def all_strings(alphabet, max_len):
     ("io/simple.in", 2),
     ("io/no_final.in", 6),
     ("io/all_final.in", 6),
+    ("io/singleton.in", 2),
+    ("io/unreachable.in", 6),
+    ("io/same_start.in", 6),
+    ("io/cycle.in", 10),
 ])
 def test_language_equivalence(input_file, max_len, monkeypatch):
     # Redirect stdin to read from the given file
