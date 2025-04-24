@@ -65,14 +65,13 @@ class DoubleStartDFA(Automata):
         return self
 
     def __str__(self):
-        # Header information: start state and final states.
         lines = [
             "Double Start DFA:",
             f"  Start State 1: {self.start1}",
-            f"  Start State 2: {self.start2}"
+            f"  Start State 2: {self.start2}",
             f"  Final States: {sorted(list(self.final))}"
         ]
-        return '\n'.join(lines) + super().__str__()
+        return "\n".join(lines) + super().__str__()
 
 class MultiFinalDFA(Automata):
     def __init__(self, states: Set, alphabet: Set,
@@ -93,9 +92,15 @@ class MultiFinalDFA(Automata):
         lines = [
             "MultiFinal DFA:",
             f"  Start State: {self.start}",
-            f"  State Partition: {self.partition}", ''
+            f"  State Partition: {self.get_partition_list()}", ''
         ]
         return '\n'.join(lines) + super().__str__()
+    
+    def get_partition_list(self):
+        P_dict = defaultdict(set)
+        for q, part in self.partition.items():
+            P_dict[part].add(q)
+        return list(P_dict.values())
 
 
 def convert_double_start_to_double_final_dfa(dfa: DoubleStartDFA) -> MultiFinalDFA:
@@ -115,6 +120,52 @@ def convert_double_start_to_double_final_dfa(dfa: DoubleStartDFA) -> MultiFinalD
 
     return MultiFinalDFA(new_states, dfa.alphabet, new_transition, new_start, partition)
 
+def get_start_states(dfa: Automata):
+    match dfa:
+        case DFA() | MultiFinalDFA():
+            return [dfa.start]
+        case DoubleStartDFA():
+            return [dfa.start1, dfa.start2]
+
+def remove_unreachable_states(dfa: Automata) -> Automata:
+    # 1. Find reachable states via DFS/BFS from start_state
+    reachable = set()
+    stack = get_start_states(dfa)
+    while stack:
+        q = stack.pop()
+        if q in reachable:
+            continue
+        reachable.add(q)
+        for a in dfa.alphabet:
+            # get the next state (if defined)
+            q_next = dfa.transition.get((q, a))
+            if q_next is not None and q_next not in reachable:
+                stack.append(q_next)
+
+    # 2. Build trimmed components
+    new_states = reachable
+    new_final = set()
+    new_partition = {}
+    match dfa:
+        case DFA() | DoubleStartDFA():
+            new_final = dfa.final & reachable
+        case MultiFinalDFA():
+            new_partition = {q: part for q, part in dfa.partition.items() if q in reachable}
+
+    # keep only transitions whose source is reachable
+    new_transitions = {}
+    for (q, a), q_next in dfa.transition.items():
+        if q in reachable and q_next in reachable:
+            new_transitions[(q, a)] = q_next
+
+    match dfa:
+        case DFA():
+            return DFA(new_states, dfa.alphabet, new_transitions, dfa.start, new_final)
+        case DoubleStartDFA():
+            return DoubleStartDFA(new_states, dfa.alphabet, new_transitions, dfa.start1, dfa.start2, new_final)
+        case MultiFinalDFA():
+            return MultiFinalDFA(new_states, dfa.alphabet, new_transitions, dfa.start, new_partition)
+
 def hopcroft_minimization(dfa: Automata) -> List[Set[int]]:
     """
     Performs DFA minimization using Hopcroft's algorithm.
@@ -124,12 +175,7 @@ def hopcroft_minimization(dfa: Automata) -> List[Set[int]]:
     P = []
     match dfa:
         case MultiFinalDFA():
-            P_dict = defaultdict(set)
-            print(f'dfa.partition: {dfa.partition}')
-            for q, part in dfa.partition.items():
-                P_dict[part].add(q)
-            P = list(P_dict.values())
-            print(f"initial P: {P}")
+            P = dfa.get_partition_list()
         case DFA() | DoubleStartDFA():
             P = [dfa.final, dfa.states - dfa.final]
         case _:
